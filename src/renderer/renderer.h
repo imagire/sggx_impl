@@ -3,6 +3,7 @@
 
 
 #include <climits>
+#include <cmath> // exp
 
 
 
@@ -59,12 +60,12 @@ Sphere spheres[] = {//Scene: radius, position, emission, color, material
 	Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), DIFF),//Left 
 	Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), DIFF),//Rght 
 	Sphere(1e5, Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), DIFF),//Back 
-	Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(), DIFF),//Frnt 
+	Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(.75, .75, .75), DIFF),//Frnt 
 	Sphere(1e5, Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), DIFF),//Botm 
 	Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75), DIFF),//Top 
 	Sphere(16.5, Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1)*.999, SPEC),//Mirr 
 	Sphere(16.5, Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1)*.999, REFR),//Glas 
-	Sphere(600, Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), DIFF) //Lite 
+	Sphere(600, Vec(50, 681.6 - .27, 81.6), Vec(10, 7.3,4.7), Vec(), DIFF) //Lite 
 };
 inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; }
 inline int toInt(double x){ return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
@@ -76,7 +77,10 @@ inline bool intersect(const Ray &r, double &t, int &id){
 Vec radiance(const Ray &r, int depth, Random &rnd){
 	double t;                               // distance to intersection 
 	int id = 0;                               // id of intersected object 
+
+	// 見つからなかった際にincomingの効果を探る
 	if (!intersect(r, t, id)) return Vec(); // if miss, return black 
+
 	const Sphere &obj = spheres[id];        // the hit object 
 	Vec x = r.o + r.d*t, n = (x - obj.p).norm(), nl = n.dot(r.d)<0 ? n : n*-1, f = obj.c;
 	double p = f.x>f.y && f.x>f.z ? f.x : f.y>f.z ? f.y : f.z; // max refl 
@@ -111,18 +115,15 @@ public:
 	~renderer(){}
 	inline void run(int w, int h, unsigned char *dst, bool *p_is_finished)
 	{
-		// ##################### ここから
 		// global settings
 		const int iteration_max = 256;
 		Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm()); // cam pos, dir 
 		Vec cx = Vec(w*.5135 / h), cy = (cx%cam.d).norm()*.5135;
 		Vec *r = new Vec[4*w*h];// サブピクセルまで含めたフレームバッファ
 		for (int i = 0; i < 4 * w*h; i++) r[i] = Vec(0, 0, 0);
-		// ##################### ここまでや
 
 		for (int l = 0; l < iteration_max; l++)
 		{
-			// ##################### ここから
 			// ray tracing!!!
 			const int samps = 8; // # samples iteration_max*samps がカメラからレイを飛ばす数になる
 #pragma omp parallel for schedule(dynamic, 1)       // OpenMP 
@@ -144,22 +145,31 @@ public:
 					}
 				}
 			}
-			// ##################### ここまでを独自rendererで変更しましょう
 
 			// 時間切れになっているようならおとなしく止める
 			if (*p_is_finished) break;
 
 			// 結果を画面イメージに書き出す (BMP用に上下反転)
 			std::lock_guard<std::mutex> lock(mtx);
-			const double coeff = 0.25 / (double)(l+1);
+			const double tonemap_coeff = -0.25 / (double)(l+1);
 			int addr = 0;
 			for (int y = 0; y < h; y++){ 
 				const Vec *v = &r[4 * (h - 1 - y) * w];
 				for (unsigned short x = 0; x < w; x++){
-					Vec c = v[0] + v[1] + v[2] + v[3];// ここでサブピクセルの合成を行う
-					dst[addr + 0] = (unsigned char)(clamp(c.x * coeff) * 255.0);
-					dst[addr + 1] = (unsigned char)(clamp(c.y * coeff) * 255.0);
-					dst[addr + 2] = (unsigned char)(clamp(c.z * coeff) * 255.0);
+					// サブピクセルの合成
+					Vec c = v[0] + v[1] + v[2] + v[3];
+					// tone mapping
+					c.x = (c.x < 0.0) ? 0.0 : (1.0 - exp(c.x * tonemap_coeff));
+					c.y = (c.y < 0.0) ? 0.0 : (1.0 - exp(c.y * tonemap_coeff));
+					c.z = (c.z < 0.0) ? 0.0 : (1.0 - exp(c.z * tonemap_coeff));
+					// gamma correct
+					c.x = pow(c.x, 1.0 / 2.2);
+					c.y = pow(c.y, 1.0 / 2.2);
+					c.z = pow(c.z, 1.0 / 2.2);
+					// 出力バッファに記録
+					dst[addr + 2] = (unsigned char)(c.x * 255.99);
+					dst[addr + 1] = (unsigned char)(c.y * 255.99);
+					dst[addr + 0] = (unsigned char)(c.z * 255.99);
 					addr += 3;
 					v+=4;
 				}
