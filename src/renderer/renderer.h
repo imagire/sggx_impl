@@ -66,7 +66,7 @@ Sphere spheres[] = {//Scene: radius, position, emission, color, material
 	Sphere(16.5, Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1)*.999, SPEC),//Mirr 
 	Sphere(16.5, Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1)*.999, REFR),//Glas 
 	Sphere(600, Vec(50, 681.6 - .27, 81.6), Vec(10, 7.3,4.7), Vec(), DIFF) //Lite 
-};
+};;
 inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; }
 inline int toInt(double x){ return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
 inline bool intersect(const Ray &r, double &t, int &id){
@@ -74,6 +74,10 @@ inline bool intersect(const Ray &r, double &t, int &id){
 	for (int i = int(n); i--;) if ((d = spheres[i].intersect(r)) && d<t){ t = d; id = i; }
 	return t<inf;
 }
+
+Vec ParticipatingMediaCenter = Vec(50, 40.8, 81.6);
+
+Vec ParticipatingEffect(Vec out, Vec in, Vec incoming){	Vec o;	Vec c = (out + in) * 0.5 - ParticipatingMediaCenter;	double d = c.dot(c);	double damping = (d < 1000) ? 0.3 : 1.0;	o.x = incoming.x * damping;	o.y = incoming.y * damping;	o.z = incoming.z * damping;	return o;}
 Vec radiance(const Ray &r, int depth, Random &rnd){
 	double t;                               // distance to intersection 
 	int id = 0;                               // id of intersected object 
@@ -83,6 +87,7 @@ Vec radiance(const Ray &r, int depth, Random &rnd){
 
 	const Sphere &obj = spheres[id];        // the hit object 
 	Vec x = r.o + r.d*t, n = (x - obj.p).norm(), nl = n.dot(r.d)<0 ? n : n*-1, f = obj.c;
+
 	double p = f.x>f.y && f.x>f.z ? f.x : f.y>f.z ? f.y : f.z; // max refl 
 	if (++depth>5) if (rnd.next01()<p) f = f*(1 / p); else return obj.e; //R.R. 
 	if (100<depth) return obj.e; //R.R. 
@@ -90,21 +95,23 @@ Vec radiance(const Ray &r, int depth, Random &rnd){
 		double r1 = 2 * M_PI*rnd.next01(), r2 = rnd.next01(), r2s = sqrt(r2);
 		Vec w = nl, u = ((fabs(w.x)>.1 ? Vec(0, 1) : Vec(1)) % w).norm(), v = w%u;
 		Vec d = (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2)).norm();
-		return obj.e + f.mult(radiance(Ray(x, d), depth, rnd));
+		return ParticipatingEffect(x, r.o,
+			obj.e + f.mult(radiance(Ray(x, d), depth, rnd)));
 	}
 	else if (obj.refl == SPEC)            // Ideal SPECULAR reflection 
-		return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, rnd));
+		return ParticipatingEffect(x, r.o, obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, rnd)));// ‚±‚±‚ÉŠÖ—^”}Ž¿‚ð’Ê‚Á‚½Œø‰Ê‚ª•K—v
 	Ray reflRay(x, r.d - n * 2 * n.dot(r.d));     // Ideal dielectric REFRACTION 
 	bool into = n.dot(nl)>0;                // Ray from outside going in? 
 	double nc = 1, nt = 1.5, nnt = into ? nc / nt : nt / nc, ddn = r.d.dot(nl), cos2t;
 	if ((cos2t = 1 - nnt*nnt*(1 - ddn*ddn))<0)    // Total internal reflection 
-		return obj.e + f.mult(radiance(reflRay, depth, rnd));
+		return ParticipatingEffect(x, r.o, obj.e + f.mult(radiance(reflRay, depth, rnd)));
 	Vec tdir = (r.d*nnt - n*((into ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).norm();
 	double a = nt - nc, b = nt + nc, R0 = a*a / (b*b), c = 1 - (into ? -ddn : tdir.dot(n));
 	double Re = R0 + (1 - R0)*c*c*c*c*c, Tr = 1 - Re, P = .25 + .5*Re, RP = Re / P, TP = Tr / (1 - P);
-	return obj.e + f.mult(depth>2 ? (rnd.next01()<P ?   // Russian roulette 
+	// ‚±‚±‚ÉŠÖ—^”}Ž¿‚ð’Ê‚Á‚½Œø‰Ê‚ª•K—v
+	return ParticipatingEffect(x, r.o, obj.e + f.mult(depth>2 ? (rnd.next01()<P ?   // Russian roulette 
 		radiance(reflRay, depth, rnd)*RP : radiance(Ray(x, tdir), depth, rnd)*TP) :
-		radiance(reflRay, depth, rnd)*Re + radiance(Ray(x, tdir), depth, rnd)*Tr);
+		radiance(reflRay, depth, rnd)*Re + radiance(Ray(x, tdir), depth, rnd)*Tr));
 }
 
 extern std::mutex mtx;
