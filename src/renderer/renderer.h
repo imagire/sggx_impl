@@ -83,14 +83,22 @@ Vec ParticipatingMediaCenter = Vec(50, 40.8, 81.6);
 Vec cube_pos = Vec(40, 30.8, 71.6);
 Vec cube_sca = Vec(20, 20, 20);
 
-static inline Vec world_2_cube(Vec in)
+static inline Vec world_2_cube(const Vec in)
 {
 	return (in - cube_pos) / cube_sca;
 }
 
-static inline Vec cube_2_world(Vec in)
+static inline Vec cube_2_world(const Vec in)
 {
 	return in * cube_sca + cube_pos;
+}
+
+static inline bool intersect_xPositive(const Vec in, const Vec diff, Vec &o0, Vec &o1)
+{
+	// in から in + diffで(0, 0, 0) - (1, 1, 1)を突き抜けるかx軸の正の方向に判定
+	// 突き抜けた場合は、交差領域の始点と終点をo0, o1に入れてtrueで返る
+
+	return true;
 }
 
 static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
@@ -103,31 +111,35 @@ static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
 	double dy = d.y * d.y;
 	double dz = d.z * d.z;
 
+	Vec o0, o1;
 	if (dy < dx && dz < dx){
 		// x
 		if (0 < d.x){
-			// x+
+			if (!intersect_xPositive(x0, d, o0, o1)) return false; // x+
 		}
 		else{
-			// x-
+			if (!intersect_xNegative(x0, d, o0, o1)) return false; // x-
 		}
 	}else 
 	if (dx < dy && dz < dy){
 		if (0 < d.y){
-			// y+
+			if (!intersect_yPositive(x0, d, o0, o1)) return false;// y+
 		}
 		else{
-			// y-
+			if (!intersect_yNegative(x0, d, o0, o1)) return false;// y-
 		}
 	}
 	else{
 		if (0 < d.z){
-			// z+
+			if (!intersect_zPositive(x0, d, o0, o1)) return false;// z+
 		}
 		else{
-			// z-
+			if (!intersect_zNegative(x0, d, o0, o1)) return false;// z-
 		}
 	}
+
+	dest.o = cube_2_world(o0);
+	dest.d = cube_2_world(o1) - dest.o;
 
 	return true;
 }
