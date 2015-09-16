@@ -35,6 +35,7 @@ struct Vec {
 	Vec(double x_ = 0, double y_ = 0, double z_ = 0){ x = x_; y = y_; z = z_; }
 	Vec operator+(const Vec &b) const { return Vec(x + b.x, y + b.y, z + b.z); }
 	Vec operator-(const Vec &b) const { return Vec(x - b.x, y - b.y, z - b.z); }
+	Vec operator*(const Vec &b) const { return Vec(x * b.x, y * b.y, z * b.z); }
 	Vec operator*(double b) const { return Vec(x*b, y*b, z*b); }
 	Vec operator/(const Vec &b) const { return Vec(x / b.x, y / b.y, z / b.z); }
 	Vec mult(const Vec &b) const { return Vec(x*b.x, y*b.y, z*b.z); }
@@ -82,16 +83,51 @@ Vec ParticipatingMediaCenter = Vec(50, 40.8, 81.6);
 Vec cube_pos = Vec(40, 30.8, 71.6);
 Vec cube_sca = Vec(20, 20, 20);
 
-static inline Vec world_2_cube_sp(Vec in)
+static inline Vec world_2_cube(Vec in)
 {
 	return (in - cube_pos) / cube_sca;
 }
 
+static inline Vec cube_2_world(Vec in)
+{
+	return in * cube_sca + cube_pos;
+}
+
 static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
 {
-	x0 = world_2_cube_sp(x0);
-	x1 = world_2_cube_sp(x1);
+	x0 = world_2_cube(x0);
+	x1 = world_2_cube(x1);
 	// x0-x1‚ª(0,0,0)-(1,1,1)‚ð“Ë‚«”²‚¯‚é‚©”»’è
+	Vec d = x1 - x0;
+	double dx = d.x * d.x;
+	double dy = d.y * d.y;
+	double dz = d.z * d.z;
+
+	if (dy < dx && dz < dx){
+		// x
+		if (0 < d.x){
+			// x+
+		}
+		else{
+			// x-
+		}
+	}else 
+	if (dx < dy && dz < dy){
+		if (0 < d.y){
+			// y+
+		}
+		else{
+			// y-
+		}
+	}
+	else{
+		if (0 < d.z){
+			// z+
+		}
+		else{
+			// z-
+		}
+	}
 
 	return true;
 }
