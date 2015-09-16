@@ -3,7 +3,7 @@
 
 
 #include <climits>
-#include <cmath> // exp
+#include <cmath> // exp, sqrt
 
 
 
@@ -36,12 +36,14 @@ struct Vec {
 	Vec operator+(const Vec &b) const { return Vec(x + b.x, y + b.y, z + b.z); }
 	Vec operator-(const Vec &b) const { return Vec(x - b.x, y - b.y, z - b.z); }
 	Vec operator*(double b) const { return Vec(x*b, y*b, z*b); }
+	Vec operator/(const Vec &b) const { return Vec(x / b.x, y / b.y, z / b.z); }
 	Vec mult(const Vec &b) const { return Vec(x*b.x, y*b.y, z*b.z); }
 	Vec& norm(){ return *this = *this * (1 / sqrt(x*x + y*y + z*z)); }
 	double dot(const Vec &b) const { return x*b.x + y*b.y + z*b.z; } // cross: 
+	double length() const { return sqrt(dot(*this)); }
 	Vec operator%(Vec&b){ return Vec(y*b.z - z*b.y, z*b.x - x*b.z, x*b.y - y*b.x); }
 };
-struct Ray { Vec o, d; Ray(Vec o_, Vec d_) : o(o_), d(d_) {} };
+struct Ray { Vec o, d; Ray(){ ; } Ray(Vec o_, Vec d_) : o(o_), d(d_) {} };
 enum Refl_t { DIFF, SPEC, REFR };  // material types, used in radiance() 
 struct Sphere {
 	double rad;       // radius 
@@ -77,7 +79,42 @@ inline bool intersect(const Ray &r, double &t, int &id){
 
 Vec ParticipatingMediaCenter = Vec(50, 40.8, 81.6);
 
-Vec ParticipatingEffect(Vec out, Vec in, Vec incoming){	Vec o;	Vec c = (out + in) * 0.5 - ParticipatingMediaCenter;	double d = c.dot(c);	double damping = (d < 1000) ? 0.3 : 1.0;	o.x = incoming.x * damping;	o.y = incoming.y * damping;	o.z = incoming.z * damping;	return o;}
+Vec cube_pos = Vec(40, 30.8, 71.6);
+Vec cube_sca = Vec(20, 20, 20);
+
+static inline Vec world_2_cube_sp(Vec in)
+{
+	return (in - cube_pos) / cube_sca;
+}
+
+static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
+{
+	x0 = world_2_cube_sp(x0);
+	x1 = world_2_cube_sp(x1);
+	// x0-x1‚ª(0,0,0)-(1,1,1)‚ð“Ë‚«”²‚¯‚é‚©”»’è
+
+	return true;
+}
+
+Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
+{
+	Ray ray;
+	bool bx = intersect_cube(in, out, ray);
+
+	if (!intersect_cube(in, out, ray)) return incoming;
+
+	double l = ray.d.length();
+	double damping = 0.1 * l;
+	double damping_inv = 1.0 - damping;
+
+	Vec o;
+	o.x = incoming.x * damping_inv + 1.0 * damping;
+	o.y = incoming.y * damping_inv + 1.0 * damping;
+	o.z = incoming.z * damping_inv + 1.0 * damping;
+
+	return o;
+}
+
 Vec radiance(const Ray &r, int depth, Random &rnd){
 	double t;                               // distance to intersection 
 	int id = 0;                               // id of intersected object 
