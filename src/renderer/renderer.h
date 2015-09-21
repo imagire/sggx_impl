@@ -78,10 +78,8 @@ inline bool intersect(const Ray &r, double &t, int &id){
 	return t<inf;
 }
 
-Vec ParticipatingMediaCenter = Vec(50, 40.8, 81.6);
-
-Vec cube_pos = Vec(40, 30.8, 71.6);
-Vec cube_sca = Vec(20, 20, 20);
+Vec cube_pos = Vec(20, 10.8, 100.6);
+Vec cube_sca = Vec(60, 60, 60);
 
 static inline Vec world_2_cube(const Vec in)
 {
@@ -93,10 +91,111 @@ static inline Vec cube_2_world(const Vec in)
 	return in * cube_sca + cube_pos;
 }
 
-static inline bool intersect_xPositive(const Vec in, const Vec diff, Vec &o0, Vec &o1)
+static inline bool intersect(const Vec in, const Vec diff, Vec &o0, Vec &o1)
 {
 	// in から in + diffで(0, 0, 0) - (1, 1, 1)を突き抜けるかx軸の正の方向に判定
 	// 突き抜けた場合は、交差領域の始点と終点をo0, o1に入れてtrueで返る
+	int state = 0;// 0:外側、1:internal 2: external again
+
+	if (0.0 <= in.x && in.x < 1.0 &&
+		0.0 <= in.y && in.y < 1.0 &&
+		0.0 <= in.z && in.z < 1.0)
+	{
+		state = 1;
+		o0 = in;
+	}
+
+	double t_min = 0.0;
+	for (;state < 2; state++){
+		double t_max = 1000000.0;
+		Vec x_max;
+		// x == 0
+		double t = -in.x / diff.x;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.y && x.y < 1.0 &&
+				0.0 <= x.z && x.z < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+		// x == 1
+		t = (1.0 - in.x) / diff.x;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.y && x.y < 1.0 &&
+				0.0 <= x.z && x.z < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+		// y == 0
+		t = -in.y / diff.y;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.x && x.x < 1.0 &&
+				0.0 <= x.z && x.z < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+		// y == 1
+		t = (1.0 - in.y) / diff.y;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.x && x.x < 1.0 &&
+				0.0 <= x.z && x.z < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+		// z == 0
+		t = -in.z / diff.z;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.x && x.x < 1.0 &&
+				0.0 <= x.y && x.y < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+		// z == 1
+		t = (1.0 - in.z) / diff.z;
+		if (t_min < t && t < t_max){
+			Vec x = in + diff * t;
+			if (0.0 <= x.x && x.x < 1.0 &&
+				0.0 <= x.y && x.y < 1.0)
+			{
+				t_max = t;
+				x_max = x;
+			}
+		}
+
+		if (0 == state){
+			if (1.0 < t_max){
+				// 交点がなければ交差しない
+				return false;
+			}
+			else{
+				o0 = x_max;
+				t_min = t_max;
+			}
+		}
+		else{
+			if (1.0 < t_max){
+				// 入って出なかったら最後の点が終点
+				o1 = in + diff;
+			}
+			else{
+				o1 = x_max;
+			}
+		}
+	}
 
 	return true;
 }
@@ -112,31 +211,7 @@ static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
 	double dz = d.z * d.z;
 
 	Vec o0, o1;
-	if (dy < dx && dz < dx){
-		// x
-		if (0 < d.x){
-			if (!intersect_xPositive(x0, d, o0, o1)) return false; // x+
-		}
-		else{
-			if (!intersect_xNegative(x0, d, o0, o1)) return false; // x-
-		}
-	}else 
-	if (dx < dy && dz < dy){
-		if (0 < d.y){
-			if (!intersect_yPositive(x0, d, o0, o1)) return false;// y+
-		}
-		else{
-			if (!intersect_yNegative(x0, d, o0, o1)) return false;// y-
-		}
-	}
-	else{
-		if (0 < d.z){
-			if (!intersect_zPositive(x0, d, o0, o1)) return false;// z+
-		}
-		else{
-			if (!intersect_zNegative(x0, d, o0, o1)) return false;// z-
-		}
-	}
+	if (!intersect(x0, d, o0, o1)) return false;
 
 	dest.o = cube_2_world(o0);
 	dest.d = cube_2_world(o1) - dest.o;
@@ -152,13 +227,15 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 	if (!intersect_cube(in, out, ray)) return incoming;
 
 	double l = ray.d.length();
-	double damping = 0.1 * l;
+	double damping = 0.01 * l;
+//	double damping = 0.01 * l;
+	damping = (1.0 < damping) ? 1.0 : damping;
 	double damping_inv = 1.0 - damping;
 
 	Vec o;
-	o.x = incoming.x * damping_inv + 1.0 * damping;
-	o.y = incoming.y * damping_inv + 1.0 * damping;
-	o.z = incoming.z * damping_inv + 1.0 * damping;
+	o.x = incoming.x * damping_inv + 1. * damping;
+	o.y = incoming.y * damping_inv + 1. * damping;
+	o.z = incoming.z * damping_inv + 1. * damping;
 
 	return o;
 }
