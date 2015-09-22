@@ -78,8 +78,44 @@ inline bool intersect(const Ray &r, double &t, int &id){
 	return t<inf;
 }
 
-Vec cube_pos = Vec(20, 10.8, 100.6);
-Vec cube_sca = Vec(60, 60, 60);
+#define VOLUME_X 4
+#define VOLUME_Y 4
+#define VOLUME_Z 4
+double volume_density[VOLUME_Z][VOLUME_Y][VOLUME_X] = 
+{
+	{
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+	},
+	{
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+	},
+	{
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+	},
+	{
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+		{ 1.0, 0.0, 1.0, 1.0 },
+		{ 0.0, 1.0, 0.0, 1.0 },
+	},
+};
+
+Vec cube_pos = Vec(20, 10.8, 55.6);
+Vec cube_sca = Vec(60, 60, 120);
+//Vec cube_pos = Vec(20, 10.8, 55.6);
+//Vec cube_sca = Vec(60, 60, 20);
+#define DAMPING_CONST 0.01
+//#define DAMPING_CONST 0.01
+//#define DAMPING_CONST 0.01
 
 static inline Vec world_2_cube(const Vec in)
 {
@@ -91,9 +127,25 @@ static inline Vec cube_2_world(const Vec in)
 	return in * cube_sca + cube_pos;
 }
 
-static inline bool intersect(const Vec in, const Vec diff, Vec &o0, Vec &o1)
+static inline Vec cube_2_world_SR(const Vec in)
 {
-	// in から in + diffで(0, 0, 0) - (1, 1, 1)を突き抜けるかx軸の正の方向に判定
+	return in * cube_sca;
+}
+
+static inline bool AABB_test(const Vec in, const Vec out)
+{
+	Vec v_min = Vec(in.x < out.x ? in.x : out.x, in.y < out.y ? in.y : out.y, in.z < out.z ? in.z : out.z);
+	Vec v_max = Vec(in.x < out.x ? out.x : in.x, in.y < out.y ? out.y : in.y, in.z < out.z ? out.z : in.z);
+
+	return 0.0 < v_max.x && 0.0 <= v_max.y && 0.0 < v_max.z
+		&& v_min.x < 1.0 && v_min.y < 1.0 && v_min.z < 1.0;
+}
+
+// in から in + diffで(0, 0, 0) - (1, 1, 1)を突き抜けるか判定
+static inline bool intersect(const Vec in, const Vec diff, Ray &o)
+{
+	if (!AABB_test(in, in + diff)) return false;// 簡易テスト
+
 	// 突き抜けた場合は、交差領域の始点と終点をo0, o1に入れてtrueで返る
 	int state = 0;// 0:外側、1:internal 2: external again
 
@@ -102,7 +154,7 @@ static inline bool intersect(const Vec in, const Vec diff, Vec &o0, Vec &o1)
 		0.0 <= in.z && in.z < 1.0)
 	{
 		state = 1;
-		o0 = in;
+		o.o = in;
 	}
 
 	double t_min = 0.0;
@@ -182,17 +234,17 @@ static inline bool intersect(const Vec in, const Vec diff, Vec &o0, Vec &o1)
 				return false;
 			}
 			else{
-				o0 = x_max;
+				o.o = x_max;
 				t_min = t_max;
 			}
 		}
 		else{
 			if (1.0 < t_max){
 				// 入って出なかったら最後の点が終点
-				o1 = in + diff;
+				o.d = in + diff - o.o;
 			}
 			else{
-				o1 = x_max;
+				o.d = x_max - o.o;
 			}
 		}
 	}
@@ -200,44 +252,101 @@ static inline bool intersect(const Vec in, const Vec diff, Vec &o0, Vec &o1)
 	return true;
 }
 
-static inline bool intersect_cube(Vec x0, Vec x1, Ray &dest)
+static inline Vec computep_participating_radiance(const int *id, const Vec i, const Vec o, const Vec incoming)
 {
-	x0 = world_2_cube(x0);
-	x1 = world_2_cube(x1);
-	// x0-x1が(0,0,0)-(1,1,1)を突き抜けるか判定
-	Vec d = x1 - x0;
-	double dx = d.x * d.x;
-	double dy = d.y * d.y;
-	double dz = d.z * d.z;
+	// ワールド空間に変換
+	const Vec iw = cube_2_world(i);
+	const Vec ow = cube_2_world(o);
 
-	Vec o0, o1;
-	if (!intersect(x0, d, o0, o1)) return false;
+	double l = (ow-iw).length();
+	double damping = DAMPING_CONST * l * volume_density[id[2]][id[1]][id[0]];
+	damping = (1.0 < damping) ? 1.0 : damping;
+	double damping_inv = 1.0 - damping;
 
-	dest.o = cube_2_world(o0);
-	dest.d = cube_2_world(o1) - dest.o;
+	return incoming * damping_inv + Vec(1, 1, 1) * damping;
 
-	return true;
 }
 
 Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 {
 	Ray ray;
-	bool bx = intersect_cube(in, out, ray);
 
-	if (!intersect_cube(in, out, ray)) return incoming;
+	Vec x0 = world_2_cube(in);
+	Vec x1 = world_2_cube(out);
 
-	double l = ray.d.length();
-	double damping = 0.01 * l;
-//	double damping = 0.01 * l;
-	damping = (1.0 < damping) ? 1.0 : damping;
-	double damping_inv = 1.0 - damping;
+	// x0-x1が(0,0,0)-(1,1,1)を突き抜けるか判定
+	Vec d = x1 - x0;
+	bool sign_x = 0.0 < d.x;
+	bool sign_y = 0.0 < d.y;
+	bool sign_z = 0.0 < d.z;
 
-	Vec o;
-	o.x = incoming.x * damping_inv + 1. * damping;
-	o.y = incoming.y * damping_inv + 1. * damping;
-	o.z = incoming.z * damping_inv + 1. * damping;
+	Ray o;
+	if (!intersect(x0, d, o)) return incoming;// ボリュームと交差しませんでした。
 
-	return o;
+	int id[3] = { 
+		(int)((double)VOLUME_X * o.o.x + 0.00000 * d.x),
+		(int)((double)VOLUME_Y * o.o.y + 0.00000 * d.y),
+		(int)((double)VOLUME_Z * o.o.z + 0.00000 * d.z) };// エッジで判定するときわどい可能性があるので、少し進めて判定
+	// todo: assert でひっかけてはみたい
+	if (id[0] < 0) id[0] = 0;
+	if (id[1] < 0) id[1] = 0;
+	if (id[2] < 0) id[2] = 0;
+	if (VOLUME_X <= id[0]) id[0] = VOLUME_X - 1;
+	if (VOLUME_Y <= id[1]) id[1] = VOLUME_Y - 1;
+	if (VOLUME_Z <= id[2]) id[2] = VOLUME_Z - 1;
+
+	double t = 0.0;
+	Vec x = o.o;
+	do{
+		double tx, ty, tz;
+		if (sign_x){
+			tx = ((id[0] + 1) / (double)VOLUME_X - o.o.x) / o.d.x;
+		}
+		else{
+			tx = ((id[0] - 1) / (double)VOLUME_X - o.o.x) / o.d.x;
+		}
+		if (sign_y){
+			ty = ((id[1] + 1) / (double)VOLUME_Y - o.o.y) / o.d.y;
+		}
+		else{
+			ty = ((id[1] - 1) / (double)VOLUME_Y - o.o.y) / o.d.y;
+		}
+		if (sign_z){
+			tz = ((id[2] + 1) / (double)VOLUME_Z - o.o.z) / o.d.z;
+		}
+		else{
+			tz = ((id[2] - 1) / (double)VOLUME_Z - o.o.z) / o.d.z;
+		}
+		if (tx < ty && tx < tz){
+			t = (1.0 < tx) ? 1.0 : tx;
+			Vec next = o.o + o.d * t;
+			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			x = next;
+			id[0] += (sign_x) ? 1 : -1;
+			if (id[0] < 0) break;
+			if (VOLUME_X <= id[0]) break;
+		}
+		else if (ty < tz && ty < tx){
+			t = (1.0 < ty) ? 1.0 : ty;
+			Vec next = o.o + o.d * t;
+			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			x = next;
+			id[1] += (sign_y) ? 1 : -1;
+			if (id[1] < 0) break;
+			if (VOLUME_Y <= id[1]) break;
+		}
+		else{
+			t = (1.0 < tz) ? 1.0 : tz;
+			Vec next = o.o + o.d * t;
+			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			x = next;
+			id[2] += (sign_z) ? 1 : -1;
+			if (id[2] < 0) break;
+			if (VOLUME_Z <= id[2]) break;
+		}
+	} while (t < 1.0);
+
+	return incoming;
 }
 
 Vec radiance(const Ray &r, int depth, Random &rnd){
@@ -271,9 +380,11 @@ Vec radiance(const Ray &r, int depth, Random &rnd){
 	double a = nt - nc, b = nt + nc, R0 = a*a / (b*b), c = 1 - (into ? -ddn : tdir.dot(n));
 	double Re = R0 + (1 - R0)*c*c*c*c*c, Tr = 1 - Re, P = .25 + .5*Re, RP = Re / P, TP = Tr / (1 - P);
 	// ここに関与媒質を通った効果が必要
-	return ParticipatingEffect(x, r.o, obj.e + f.mult(depth>2 ? (rnd.next01()<P ?   // Russian roulette 
+	Vec out = obj.e + f.mult(depth>2 ? (rnd.next01() < P ?   // Russian roulette 
 		radiance(reflRay, depth, rnd)*RP : radiance(Ray(x, tdir), depth, rnd)*TP) :
-		radiance(reflRay, depth, rnd)*Re + radiance(Ray(x, tdir), depth, rnd)*Tr));
+		radiance(reflRay, depth, rnd)*Re + radiance(Ray(x, tdir), depth, rnd)*Tr);
+	return ParticipatingEffect(x, r.o, out);
+//	return !into ? ParticipatingEffect(x, r.o, out) : out;
 }
 
 extern std::mutex mtx;
