@@ -40,11 +40,19 @@ struct Vec {
 	Vec operator/(const Vec &b) const { return Vec(x / b.x, y / b.y, z / b.z); }
 	Vec mult(const Vec &b) const { return Vec(x*b.x, y*b.y, z*b.z); }
 	Vec& norm(){ return *this = *this * (1 / sqrt(x*x + y*y + z*z)); }
-	double dot(const Vec &b) const { return x*b.x + y*b.y + z*b.z; } // cross: 
+	double dot(const Vec &b) const { return x*b.x + y*b.y + z*b.z; }
 	double length() const { return sqrt(dot(*this)); }
-	Vec operator%(Vec&b){ return Vec(y*b.z - z*b.y, z*b.x - x*b.z, x*b.y - y*b.x); }
+	Vec operator%(Vec&b){ return Vec(y*b.z - z*b.y, z*b.x - x*b.z, x*b.y - y*b.x); }// cross
 };
 struct Ray { Vec o, d; Ray(){ ; } Ray(Vec o_, Vec d_) : o(o_), d(d_) {} };
+
+struct Radiance{ 
+	Vec emit; 
+	double dampling; 
+	Radiance(){ emit = Vec(0, 0, 0); dampling = 1.0; }
+	Vec apply(const Vec s) const { return emit + s * dampling; }
+};
+
 enum Refl_t { DIFF, SPEC, REFR };  // material types, used in radiance() 
 struct Sphere {
 	double rad;       // radius 
@@ -72,166 +80,167 @@ Sphere spheres[] = {//Scene: radius, position, emission, color, material
 };;
 inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; }
 inline int toInt(double x){ return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
-inline bool intersect(const Ray &r, double &t, int &id){
+inline int intersect(const Ray &r, double &t){
 	double n = sizeof(spheres) / sizeof(Sphere), d, inf = t = 1e20;
 	for (int i = int(n); i--;) if ((d = spheres[i].intersect(r)) && d<t){ t = d; id = i; }
-	return t<inf;
+	return (t<inf)?id:-1;
 }
 
-#if 1
-	#define VOLUME_X 4
-	#define VOLUME_Y 4
-	#define VOLUME_Z 4
-	double volume_density[VOLUME_Z][VOLUME_Y][VOLUME_X] =
-	{
-		{
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-		},
-		{
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0 },
-		},
-	};
-#else
-	#define VOLUME_X 8
-	#define VOLUME_Y 8
-	#define VOLUME_Z 8
-	double volume_density[VOLUME_Z][VOLUME_Y][VOLUME_X] =
-	{
-		{
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-		},
-		{
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-		},
-		{
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-		},
-		{
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-		},
-		{
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-			{ 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0 },
-			{ 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 },
-		},
-	};
-#endif
-#if 0
+//#define VOLUME_SIZE2
+#define VOLUME_SIZE4
+//#define VOLUME_SIZE8
+
+#ifdef VOLUME_SIZE2
+	#define VOLUME_X 2
+	#define VOLUME_Y 2
+	#define VOLUME_Z 2
+	#define MASTER_DENSITY 0.02
+
 uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 {
 	{
-		{ 0x0000ff, 0x0000ff, 0x0000ff, 0x0000ff },
-		{ 0x0000ff, 0x0000ff, 0x0000ff, 0x0000ff },
-		{ 0x0000ff, 0x0000ff, 0x0000ff, 0x0000ff },
-		{ 0x0000ff, 0x0000ff, 0x0000ff, 0x0000ff },
+		{ 0x00ffffff, 0xffffffff },
+		{ 0xffffffff, 0x00ffffff },
 	},
 	{
-		{ 0x00ff00, 0x00ff00, 0x00ff00, 0x00ff00 },
-		{ 0x00ff00, 0x00ff00, 0x00ff00, 0x00ff00 },
-		{ 0x00ff00, 0x00ff00, 0x00ff00, 0x00ff00 },
-		{ 0x00ff00, 0x00ff00, 0x00ff00, 0x00ff00 },
-	},
-	{
-		{ 0xff0000, 0xff0000, 0xff0000, 0xff0000 },
-		{ 0xff0000, 0xff0000, 0xff0000, 0xff0000 },
-		{ 0xff0000, 0xff0000, 0xff0000, 0xff0000 },
-		{ 0xff0000, 0xff0000, 0xff0000, 0xff0000 },
-	},
-	{
-		{ 0xffffff, 0xffffff, 0xffffff, 0xffffff },
-		{ 0xffffff, 0xffffff, 0xffffff, 0xffffff },
-		{ 0xffffff, 0xffffff, 0xffffff, 0xffffff },
-		{ 0xffffff, 0xffffff, 0xffffff, 0xffffff },
+		{ 0x00ffffff, 0xffffffff },
+		{ 0xffffffff, 0x00ffffff },
 	},
 };
-#endif
+
+#endif // VOLUME_SIZE2
+#ifdef VOLUME_SIZE4
+	#define VOLUME_X 4
+	#define VOLUME_Y 4
+	#define VOLUME_Z 4
+	#define MASTER_DENSITY 0.1
+//#define MASTER_DENSITY 0.02
+
+	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
+	{
+		{
+			{ 0x000000ff, 0xff0000ff, 0x000000ff, 0xff0000ff },
+			{ 0xff0000ff, 0x000000ff, 0xff0000ff, 0x000000ff },
+			{ 0x000000ff, 0xff0000ff, 0x000000ff, 0xff0000ff },
+			{ 0xff0000ff, 0x000000ff, 0xff0000ff, 0x000000ff },
+		},
+		{
+			{ 0xff00ff00, 0x0000ff00, 0xff00ff00, 0x0000ff00 },
+			{ 0x0000ff00, 0xff00ff00, 0x0000ff00, 0xff00ff00 },
+			{ 0xff00ff00, 0x0000ff00, 0xff00ff00, 0x0000ff00 },
+			{ 0x0000ff00, 0xff00ff00, 0x0000ff00, 0xff00ff00 },
+		},
+		{
+			{ 0x00ff0000, 0xffff0000, 0x00ff0000, 0xffff0000 },
+			{ 0xffff0000, 0x00ff0000, 0xffff0000, 0x00ff0000 },
+			{ 0x00ff0000, 0xffff0000, 0x00ff0000, 0xffff0000 },
+			{ 0xffff0000, 0x00ff0000, 0xffff0000, 0x00ff0000 },
+		},
+		{
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+		},
+	};
+
+#endif // VOLUME_SIZE4
+#ifdef VOLUME_SIZE8
+	#define VOLUME_X 8
+	#define VOLUME_Y 8
+	#define VOLUME_Z 8
+	#define MASTER_DENSITY 0.02
+
+	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
+	{
+		{
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+		},
+		{
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+		},
+		{
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+		},
+		{
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+		},
+		{
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+		},
+		{
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+		},
+		{
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+		},
+		{
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+			{ 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff },
+			{ 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff, 0x00ffffff, 0xffffffff },
+		},
+	};
+
+#endif // VOLUME_SIZE8
 
 Vec cube_pos = Vec(20, 10.8, 55.6);
 Vec cube_sca = Vec(60, 60, 120);
 //Vec cube_pos = Vec(20, 10.8, 55.6);
 //Vec cube_sca = Vec(60, 60, 20);
-#define DAMPING_CONST 0.02
 //#define DAMPING_CONST 0.01
 //#define DAMPING_CONST 0.01
 
@@ -262,7 +271,7 @@ static inline bool AABB_test(const Vec in, const Vec out)
 // in から in + diffで(0, 0, 0) - (1, 1, 1)を突き抜けるか判定
 static inline bool intersect(const Vec in, const Vec diff, Ray &o)
 {
-//	if (!AABB_test(in, in + diff)) return false;// 簡易テスト
+	if (!AABB_test(in, in + diff)) return false;// 簡易テスト
 
 	// 突き抜けた場合は、交差領域の始点と終点をo0, o1に入れてtrueで返る
 	int state = 0;// 0:外側、1:internal 2: external again
@@ -376,19 +385,20 @@ static inline Vec computep_participating_radiance(const int *id, const Vec i, co
 	const Vec iw = cube_2_world(i);
 	const Vec ow = cube_2_world(o);
 
+//	uint32_t voxel_data = 0xffffff;
+	uint32_t voxel_data = volume_color[id[2]][id[1]][id[0]];
+	Vec c = Vec((1.0 / 255.0)*(double)(voxel_data & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 8 & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 16 & 0xff));
+	double density = MASTER_DENSITY * (1.0 / 255.0)*(double)(voxel_data >> 24);
+
 	double l = (ow-iw).length();
-	double damping = DAMPING_CONST * l * volume_density[id[2]][id[1]][id[0]];
+	double damping = l * density;
 	damping = (1.0 < damping) ? 1.0 : damping;
 	double damping_inv = 1.0 - damping;
-	uint32_t color = 0xffffff;
-//	uint32_t color = volume_color[id[2]][id[1]][id[0]];
-	return incoming * damping_inv +
-		Vec((1.0/255.0)*(double)(color&0xff), (1.0 / 255.0)*(double)(color>>8 & 0xff), (1.0 / 255.0)*(double)(color >> 16 & 0xff))
-		* damping;
+	return incoming * damping_inv + c * damping;
 
 }
 
-Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
+Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
 {
 	Ray ray;
 
@@ -402,7 +412,7 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 	bool sign_z = 0.0 < d.z;
 
 	Ray o;
-	if (!intersect(x0, d, o)) return incoming;// ボリュームと交差しませんでした。
+	if (!intersect(x0, d, o)) return backword;// ボリュームと交差しませんでした。
 
 	int id[3] = { 
 		(int)((double)VOLUME_X * o.o.x + 0.00000 * d.x),
@@ -441,7 +451,7 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 		if (tx < ty && tx < tz){
 			t = (1.0 < tx) ? 1.0 : tx;
 			Vec next = o.o + o.d * t;
-			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[0] += (sign_x) ? 1 : -1;
 			if (id[0] < 0) break;
@@ -450,7 +460,7 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 		else if (ty < tz && ty < tx){
 			t = (1.0 < ty) ? 1.0 : ty;
 			Vec next = o.o + o.d * t;
-			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[1] += (sign_y) ? 1 : -1;
 			if (id[1] < 0) break;
@@ -459,7 +469,7 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 		else{
 			t = (1.0 < tz) ? 1.0 : tz;
 			Vec next = o.o + o.d * t;
-			incoming = computep_participating_radiance(id, x, next, incoming);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[2] += (sign_z) ? 1 : -1;
 			if (id[2] < 0) break;
@@ -467,45 +477,86 @@ Vec ParticipatingEffect(Vec out, Vec in, Vec incoming)
 		}
 	} while (t < 1.0);
 
-	return incoming;
+	return backword;
 }
 
-Vec radiance(const Ray &r, int depth, Random &rnd){
-	double t;                               // distance to intersection 
-	int id = 0;                               // id of intersected object 
+// todo: Radiance に対して、(c,a)を通ったら、(emit+dampling*a*c, dampling*(1.0-a))にする
 
-	// 見つからなかった際にincomingの効果を探る
-	if (!intersect(r, t, id)) return Vec(); // if miss, return black 
+Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd){
+	double t;                               // distance to intersection 
+
+	// オブジェクトに衝突しなかった。
+	int id = intersect(r, t); // id of intersected object 
+	if (id < 0) return backword.emit; // if miss, return black 
 
 	const Sphere &obj = spheres[id];        // the hit object 
-	Vec x = r.o + r.d*t, n = (x - obj.p).norm(), nl = n.dot(r.d)<0 ? n : n*-1, f = obj.c;
+	Vec x = r.o + r.d*t, // 衝突点
+		n = (x - obj.p).norm(), // 衝突点の法線
+		nl = n.dot(r.d)<0 ? n : n*-1, // レイの入射面からみた法線
+		f = obj.c;// 物体の色
 
-	double p = f.x>f.y && f.x>f.z ? f.x : f.y>f.z ? f.y : f.z; // max refl 
-	if (++depth>5) if (rnd.next01()<p) f = f*(1 / p); else return obj.e; //R.R. 
-	if (100<depth) return obj.e; //R.R. 
-	if (obj.refl == DIFF){                  // Ideal DIFFUSE reflection 
-		double r1 = 2 * M_PI*rnd.next01(), r2 = rnd.next01(), r2s = sqrt(r2);
-		Vec w = nl, u = ((fabs(w.x)>.1 ? Vec(0, 1) : Vec(1)) % w).norm(), v = w%u;
-		Vec d = (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2)).norm();
-		return ParticipatingEffect(x, r.o,
-			obj.e + f.mult(radiance(Ray(x, d), depth, rnd)));
+	Radiance pe = ParticipatingEffect(x, r.o, backword);
+
+	double p = f.x>f.y && f.x>f.z ? f.x : f.y>f.z ? f.y : f.z; // 最大の強さの成分の色
+
+	if (5<++depth){ // 多数回反射したとき
+		if (rnd.next01() < p) 
+			f = f * (1 / p);// 確率的に打ち切る色を取り込む
+		else 
+			return pe.apply(obj.e); // 打ち切る
 	}
-	else if (obj.refl == SPEC)            // Ideal SPECULAR reflection 
-		return ParticipatingEffect(x, r.o, obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, rnd)));// ここに関与媒質を通った効果が必要
-	Ray reflRay(x, r.d - n * 2 * n.dot(r.d));     // Ideal dielectric REFRACTION 
-	bool into = n.dot(nl)>0;                // Ray from outside going in? 
-	double nc = 1, nt = 1.5, nnt = into ? nc / nt : nt / nc, ddn = r.d.dot(nl), cos2t;
-	if ((cos2t = 1 - nnt*nnt*(1 - ddn*ddn))<0)    // Total internal reflection 
-		return ParticipatingEffect(x, r.o, obj.e + f.mult(radiance(reflRay, depth, rnd)));
-	Vec tdir = (r.d*nnt - n*((into ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).norm();
-	double a = nt - nc, b = nt + nc, R0 = a*a / (b*b), c = 1 - (into ? -ddn : tdir.dot(n));
-	double Re = R0 + (1 - R0)*c*c*c*c*c, Tr = 1 - Re, P = .25 + .5*Re, RP = Re / P, TP = Tr / (1 - P);
-	// ここに関与媒質を通った効果が必要
+
+	if (100<depth) return pe.apply(obj.e); // 多すぎるとそこで打ち切り
+
+	// 拡散反射
+	if (obj.refl == DIFF){
+		double r1 = 2 * M_PI*rnd.next01(), r2 = rnd.next01(), r2s = sqrt(r2);
+		Vec w = nl, 
+			u = ((fabs(w.x)>.1 ? Vec(0, 1) : Vec(1)) % w).norm(), // nl に関する従法線
+			v = w % u;// nlに関する接ベクトル
+		Vec d = (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2)).norm();// 新しい拡散方向を定義
+		return pe.apply(obj.e + f.mult(radiance(Ray(x, d), depth, pe, rnd)));
+	}
+	// 鏡面反射
+	else if (obj.refl == SPEC){
+		return pe.apply(obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, pe, rnd)));
+	}
+	// 屈折
+	Ray reflRay(x, r.d - n * 2 * n.dot(r.d));     // 反射ベクトル
+	bool into = n.dot(nl)>0;                // 入射していくならtrue
+	double nc = 1, // 空気の屈折率
+		nt = 1.5, // 透明物体の屈折率
+		nnt = into ? nc / nt : nt / nc, // 入射前と入射後の屈折率の比（変異の向き、大きさに関与）
+		ddn = r.d.dot(nl), // 屈折のための基本の変位
+		cos2t;
+	
+	// 全反射の場合
+	if ((cos2t = 1 - nnt*nnt*(1 - ddn*ddn)) < 0){
+		if (into){
+			return pe.apply(obj.e + f.mult(radiance(reflRay, depth, pe, rnd)));
+		}
+		else{
+			return backword.apply(obj.e + f.mult(radiance(reflRay, depth, backword, rnd)));
+		}
+	}
+
+	Vec tdir = (r.d*nnt - n*((into ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).norm(); // 屈折方向
+
+	double a = nt - nc, 
+		b = nt + nc, 
+		R0 = a*a / (b*b), 
+		c = 1 - (into ? -ddn : tdir.dot(n));
+	double Re = R0 + (1 - R0)*c*c*c*c*c, // フレネル効果？
+		Tr = 1 - Re, 
+		P = .25 + .5*Re, 
+		RP = Re / P, 
+		TP = Tr / (1 - P);
+	const Radiance &rr = into ? pe : backword;
 	Vec out = obj.e + f.mult(depth>2 ? (rnd.next01() < P ?   // Russian roulette 
-		radiance(reflRay, depth, rnd)*RP : radiance(Ray(x, tdir), depth, rnd)*TP) :
-		radiance(reflRay, depth, rnd)*Re + radiance(Ray(x, tdir), depth, rnd)*Tr);
-	return ParticipatingEffect(x, r.o, out);
-//	return !into ? ParticipatingEffect(x, r.o, out) : out;
+		radiance(reflRay, depth, rr, rnd)*RP : // 反射成分
+		radiance(Ray(x, tdir), depth, rr, rnd)*TP) : // 屈折成分
+		radiance(reflRay, depth, rr, rnd)*Re + radiance(Ray(x, tdir), depth, rr, rnd)*Tr);// 浅いところでは両方計算
+	return pe.apply(out);
 }
 
 extern std::mutex mtx;
@@ -540,7 +591,7 @@ public:
 								double r2 = 2 * rnd.next01(), dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
 								Vec d = cx*(((sx + .5 + dx) / 2 + x) / w - .5) +
 										cy*(((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-								ri = ri + radiance(Ray(cam.o + d * 140, d.norm()), 0, rnd)*(1. / samps);
+								ri = ri + radiance(Ray(cam.o + d * 140, d.norm()), 0, Radiance(), rnd)*(1. / samps);
 							} // Camera rays are pushed ^^^^^ forward to start in interior 
 						}
 					}
