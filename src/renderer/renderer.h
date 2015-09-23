@@ -50,6 +50,7 @@ struct Radiance{
 	Vec emit; 
 	double dampling; 
 	Radiance(){ emit = Vec(0, 0, 0); dampling = 1.0; }
+	Radiance(Vec c, double a) :emit(c),dampling(a){}
 	Vec apply(const Vec s) const { return emit + s * dampling; }
 };
 
@@ -81,14 +82,15 @@ Sphere spheres[] = {//Scene: radius, position, emission, color, material
 inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; }
 inline int toInt(double x){ return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
 inline int intersect(const Ray &r, double &t){
+	int id = -1;
 	double n = sizeof(spheres) / sizeof(Sphere), d, inf = t = 1e20;
 	for (int i = int(n); i--;) if ((d = spheres[i].intersect(r)) && d<t){ t = d; id = i; }
-	return (t<inf)?id:-1;
+	return id;
 }
 
 //#define VOLUME_SIZE2
-#define VOLUME_SIZE4
-//#define VOLUME_SIZE8
+//#define VOLUME_SIZE4
+#define VOLUME_SIZE8
 
 #ifdef VOLUME_SIZE2
 	#define VOLUME_X 2
@@ -99,10 +101,14 @@ inline int intersect(const Ray &r, double &t){
 uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 {
 	{
+//		{ 0xffffffff, 0xffffffff },
+//		{ 0xffffffff, 0xffffffff },
 		{ 0x00ffffff, 0xffffffff },
 		{ 0xffffffff, 0x00ffffff },
 	},
 	{
+//		{ 0xffffffff, 0xffffffff },
+//		{ 0xffffffff, 0xffffffff },
 		{ 0x00ffffff, 0xffffffff },
 		{ 0xffffffff, 0x00ffffff },
 	},
@@ -113,7 +119,7 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	#define VOLUME_X 4
 	#define VOLUME_Y 4
 	#define VOLUME_Z 4
-	#define MASTER_DENSITY 0.1
+	#define MASTER_DENSITY 0.02
 //#define MASTER_DENSITY 0.02
 
 	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
@@ -149,7 +155,7 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	#define VOLUME_X 8
 	#define VOLUME_Y 8
 	#define VOLUME_Z 8
-	#define MASTER_DENSITY 0.02
+	#define MASTER_DENSITY 0.01
 
 	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	{
@@ -240,7 +246,7 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 Vec cube_pos = Vec(20, 10.8, 55.6);
 Vec cube_sca = Vec(60, 60, 120);
 //Vec cube_pos = Vec(20, 10.8, 55.6);
-//Vec cube_sca = Vec(60, 60, 20);
+//Vec cube_sca = Vec(60, 60, 1);
 //#define DAMPING_CONST 0.01
 //#define DAMPING_CONST 0.01
 
@@ -379,14 +385,14 @@ static inline bool intersect(const Vec in, const Vec diff, Ray &o)
 	return true;
 }
 
-static inline Vec computep_participating_radiance(const int *id, const Vec i, const Vec o, const Vec incoming)
+static inline Radiance computep_participating_radiance(const int *id, const Vec i, const Vec o, const Radiance incoming)
 {
 	// ワールド空間に変換
 	const Vec iw = cube_2_world(i);
 	const Vec ow = cube_2_world(o);
 
-//	uint32_t voxel_data = 0xffffff;
 	uint32_t voxel_data = volume_color[id[2]][id[1]][id[0]];
+voxel_data |= 0xffffff;
 	Vec c = Vec((1.0 / 255.0)*(double)(voxel_data & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 8 & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 16 & 0xff));
 	double density = MASTER_DENSITY * (1.0 / 255.0)*(double)(voxel_data >> 24);
 
@@ -394,8 +400,8 @@ static inline Vec computep_participating_radiance(const int *id, const Vec i, co
 	double damping = l * density;
 	damping = (1.0 < damping) ? 1.0 : damping;
 	double damping_inv = 1.0 - damping;
-	return incoming * damping_inv + c * damping;
 
+	return Radiance(incoming.emit + c *incoming.dampling * damping, incoming.dampling * damping_inv);
 }
 
 Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
@@ -479,8 +485,6 @@ Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
 
 	return backword;
 }
-
-// todo: Radiance に対して、(c,a)を通ったら、(emit+dampling*a*c, dampling*(1.0-a))にする
 
 Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd){
 	double t;                               // distance to intersection 
