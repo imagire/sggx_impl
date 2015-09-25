@@ -42,16 +42,16 @@ struct Vec {
 	Vec& norm(){ return *this = *this * (1 / sqrt(x*x + y*y + z*z)); }
 	double dot(const Vec &b) const { return x*b.x + y*b.y + z*b.z; }
 	double length() const { return sqrt(dot(*this)); }
-	Vec operator%(Vec&b){ return Vec(y*b.z - z*b.y, z*b.x - x*b.z, x*b.y - y*b.x); }// cross
+	Vec operator%(const Vec&b)const{ return Vec(y*b.z - z*b.y, z*b.x - x*b.z, x*b.y - y*b.x); }// cross
 };
 struct Ray { Vec o, d; Ray(){ ; } Ray(Vec o_, Vec d_) : o(o_), d(d_) {} };
 
 struct Radiance{ 
 	Vec emit; 
-	double dampling; 
-	Radiance(){ emit = Vec(0, 0, 0); dampling = 1.0; }
-	Radiance(Vec c, double a) :emit(c),dampling(a){}
-	Vec apply(const Vec s) const { return emit + s * dampling; }
+	Vec transmit;
+	Radiance(){ emit = Vec(0, 0, 0); transmit = Vec(1.0, 1.0, 1.0); }
+	Radiance(Vec c, Vec a) :emit(c), transmit(a){}
+	Vec apply(const Vec s) const { return emit + s * transmit; }
 };
 
 enum Refl_t { DIFF, SPEC, REFR };  // material types, used in radiance() 
@@ -72,7 +72,7 @@ Sphere spheres[] = {//Scene: radius, position, emission, color, material
 	Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), DIFF),//Left 
 	Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), DIFF),//Rght 
 	Sphere(1e5, Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), DIFF),//Back 
-	Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(.75, .75, .75), DIFF),//Frnt 
+	Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(.0, .0, .0), DIFF),//Frnt 
 	Sphere(1e5, Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), DIFF),//Botm 
 	Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75), DIFF),//Top 
 	Sphere(16.5, Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1)*.999, SPEC),//Mirr 
@@ -96,7 +96,8 @@ inline int intersect(const Ray &r, double &t){
 	#define VOLUME_X 2
 	#define VOLUME_Y 2
 	#define VOLUME_Z 2
-	#define MASTER_DENSITY 0.02
+	#define MASTER_OUT_SCATTER 0.1
+	#define MASTER_EXTINCTION 0.1
 
 uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 {
@@ -119,8 +120,9 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	#define VOLUME_X 4
 	#define VOLUME_Y 4
 	#define VOLUME_Z 4
-	#define MASTER_DENSITY 0.02
-//#define MASTER_DENSITY 0.02
+	#define MASTER_OUT_SCATTER 0.02
+//#define MASTER_OUT_SCATTER 0.02
+	#define MASTER_EXTINCTION 0.02
 
 	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	{
@@ -155,7 +157,8 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	#define VOLUME_X 8
 	#define VOLUME_Y 8
 	#define VOLUME_Z 8
-	#define MASTER_DENSITY 0.01
+	#define MASTER_OUT_SCATTER 0.03
+	#define MASTER_EXTINCTION 0.03
 
 	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 	{
@@ -243,7 +246,7 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 
 #endif // VOLUME_SIZE8
 
-Vec cube_pos = Vec(20, 10.8, 55.6);
+Vec cube_pos = Vec(20, 10.8, 81.6);
 Vec cube_sca = Vec(60, 60, 120);
 //Vec cube_pos = Vec(20, 10.8, 55.6);
 //Vec cube_sca = Vec(60, 60, 1);
@@ -258,11 +261,6 @@ static inline Vec world_2_cube(const Vec in)
 static inline Vec cube_2_world(const Vec in)
 {
 	return in * cube_sca + cube_pos;
-}
-
-static inline Vec cube_2_world_SR(const Vec in)
-{
-	return in * cube_sca;
 }
 
 static inline bool AABB_test(const Vec in, const Vec out)
@@ -385,7 +383,24 @@ static inline bool intersect(const Vec in, const Vec diff, Ray &o)
 	return true;
 }
 
-static inline Radiance computep_participating_radiance(const int *id, const Vec i, const Vec o, const Radiance incoming)
+static inline Vec ComputeDiffuseRay(const Vec n,  Random &rnd)
+{
+	double r1 = 2 * M_PI*rnd.next01(), r2 = rnd.next01(), r2s = sqrt(r2);
+	Vec u = ((fabs(n.x) > .1 ? Vec(0, 1) : Vec(1)) % n).norm(), // nl に関する従法線
+		v = n % u;// nlに関する接ベクトル
+	return Vec(u*cos(r1)*r2s + v*sin(r1)*r2s + n*sqrt(1 - r2)).norm();// 新しい拡散方向を定義
+}
+
+static inline double HenyeyGreensteinPhaseFunction(double co)
+{
+	double g = 0.9;
+	const double PI = 3.1415926535;
+	return (1.0 - g*g) / (4.0*PI*pow(abs(1.0 + g*g - 2.0*g*co), 1.5));
+}
+
+Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd);// 前方宣言
+
+static inline Radiance computep_participating_radiance(const int *id, const Vec i, const Vec o, const Radiance incoming, int depth, Random &rnd)
 {
 	// ワールド空間に変換
 	const Vec iw = cube_2_world(i);
@@ -393,19 +408,41 @@ static inline Radiance computep_participating_radiance(const int *id, const Vec 
 
 	uint32_t voxel_data = volume_color[id[2]][id[1]][id[0]];
 voxel_data |= 0xffffff;
-	Vec c = Vec((1.0 / 255.0)*(double)(voxel_data & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 8 & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 16 & 0xff));
-	double density = MASTER_DENSITY * (1.0 / 255.0)*(double)(voxel_data >> 24);
+	Vec albedo = Vec((1.0 / 255.0)*(double)(voxel_data & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 8 & 0xff), (1.0 / 255.0)*(double)(voxel_data >> 16 & 0xff));
+	double density = (1.0 / 255.0)*(double)(voxel_data >> 24);
 
-	double l = (ow-iw).length();
-	double damping = l * density;
-	damping = (1.0 < damping) ? 1.0 : damping;
-	double damping_inv = 1.0 - damping;
 
-	return Radiance(incoming.emit + c *incoming.dampling * damping, incoming.dampling * damping_inv);
+	double l = (ow - iw).length();
+	double t = exp(-l * density * MASTER_EXTINCTION);// 光の透過量
+	Vec trans = albedo * t;
+
+	Vec c = Vec(0, 0, 0);
+	const double inscatter_probability = 0.01;
+	if (rnd.next01() < inscatter_probability){
+		// 入射光
+		double t_in = rnd.next01();
+		Vec x_in = iw * (1.0 - t_in) + ow * t_in;// 入射点
+		Vec d_in = (ow - iw).norm();
+		Vec d = ComputeDiffuseRay(d_in, rnd);
+		if (rnd.next01() < 0.5){
+			d = d * (-1.0);// 全周にレイを飛ばす
+		}
+		double phase = HenyeyGreensteinPhaseFunction(d.dot(d_in));// 確率分布の重み
+
+		c = radiance(Ray(x_in, d), ++depth, Radiance(), rnd) *
+			albedo * (
+			phase *
+			exp(-MASTER_EXTINCTION  * t_in * l * density) * // 入射後の減衰
+			(l * density * MASTER_OUT_SCATTER / inscatter_probability));
+	}
+
+	return Radiance(incoming.emit + c *incoming.transmit, incoming.transmit * trans);
 }
 
-Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
+Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword, int depth, Random &rnd)
 {
+	if (100 < ++depth) return backword;
+
 	Ray ray;
 
 	Vec x0 = world_2_cube(in);
@@ -457,7 +494,7 @@ Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
 		if (tx < ty && tx < tz){
 			t = (1.0 < tx) ? 1.0 : tx;
 			Vec next = o.o + o.d * t;
-			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword, depth, rnd);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[0] += (sign_x) ? 1 : -1;
 			if (id[0] < 0) break;
@@ -466,7 +503,7 @@ Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
 		else if (ty < tz && ty < tx){
 			t = (1.0 < ty) ? 1.0 : ty;
 			Vec next = o.o + o.d * t;
-			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword, depth, rnd);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[1] += (sign_y) ? 1 : -1;
 			if (id[1] < 0) break;
@@ -475,7 +512,7 @@ Radiance ParticipatingEffect(Vec out, Vec in, Radiance backword)
 		else{
 			t = (1.0 < tz) ? 1.0 : tz;
 			Vec next = o.o + o.d * t;
-			backword = computep_participating_radiance(id, x, next, backword);// id[0],id[1],id[2]でラディアンスの計算
+			backword = computep_participating_radiance(id, x, next, backword, depth, rnd);// id[0],id[1],id[2]でラディアンスの計算
 			x = next;
 			id[2] += (sign_z) ? 1 : -1;
 			if (id[2] < 0) break;
@@ -499,11 +536,11 @@ Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd){
 		nl = n.dot(r.d)<0 ? n : n*-1, // レイの入射面からみた法線
 		f = obj.c;// 物体の色
 
-	Radiance pe = ParticipatingEffect(x, r.o, backword);
+	Radiance pe = ParticipatingEffect(x, r.o, backword, ++depth, rnd);
 
 	double p = f.x>f.y && f.x>f.z ? f.x : f.y>f.z ? f.y : f.z; // 最大の強さの成分の色
 
-	if (5<++depth){ // 多数回反射したとき
+	if (5<depth){ // 多数回反射したとき
 		if (rnd.next01() < p) 
 			f = f * (1 / p);// 確率的に打ち切る色を取り込む
 		else 
@@ -514,11 +551,7 @@ Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd){
 
 	// 拡散反射
 	if (obj.refl == DIFF){
-		double r1 = 2 * M_PI*rnd.next01(), r2 = rnd.next01(), r2s = sqrt(r2);
-		Vec w = nl, 
-			u = ((fabs(w.x)>.1 ? Vec(0, 1) : Vec(1)) % w).norm(), // nl に関する従法線
-			v = w % u;// nlに関する接ベクトル
-		Vec d = (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2)).norm();// 新しい拡散方向を定義
+		Vec d = ComputeDiffuseRay(nl, rnd);
 		return pe.apply(obj.e + f.mult(radiance(Ray(x, d), depth, pe, rnd)));
 	}
 	// 鏡面反射
