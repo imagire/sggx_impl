@@ -89,6 +89,8 @@
     <ClInclude Include="main\stdafx.h" />
     <ClInclude Include="main\targetver.h" />
     <ClInclude Include="renderer\renderer.h" />
+    <ClInclude Include="renderer\renderer_math.h" />
+    <ClInclude Include="renderer\sggx.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main\SGGX.cpp" />
