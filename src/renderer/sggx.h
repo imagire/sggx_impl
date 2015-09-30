@@ -6,6 +6,7 @@
 // https://drive.google.com/file/d/0BzvWIdpUpRx_dXJIMk9rdEdrd00/view?usp=sharing
 // - supplemental material
 // https://drive.google.com/file/d/0BzvWIdpUpRx_djVyMG9jMnltdTg/view?usp=sharing
+
 #pragma once
 
 #include "renderer_math.h"
@@ -17,7 +18,8 @@ struct SGGX{
 		xx(xx_), yy(yy_), zz(zz_), xy(xy_), xz(xz_), yz(yz_) {}
 
 	static SGGX interpolate(const SGGX& s0, const SGGX& s1){
-		return SGGX(0.5*(s0.xx + s1.xx), 0.5*(s0.yy + s1.yy), 0.5*(s0.zz + s1.zz), 0.5*(s0.xy + s1.xy), 0.5*(s0.xz + s1.xz), 0.5*(s0.yz + s1.yz));
+		return SGGX(0.5*(s0.xx + s1.xx), 0.5*(s0.yy + s1.yy), 0.5*(s0.zz + s1.zz), 
+			0.5*(s0.xy + s1.xy), 0.5*(s0.xz + s1.xz), 0.5*(s0.yz + s1.yz));
 	}
 };
 
@@ -132,7 +134,7 @@ static inline double eval_diffuse(const Vec in, const Vec out, const SGGX &S, Ra
 	const Vec wm = sample_VNDF(in, S, rnd);
 	// eval diffuse
 	double om = out.dot(wm);
-	return (1.0 / M_PI) * (0.0 < om) ? om : 0.0;
+	return (1.0 / M_PI) * ((0.0 < om) ? om : 0.0);
 }
 
 static inline Vec sample_diffues(const Vec in, const SGGX &S, Random &rnd)
