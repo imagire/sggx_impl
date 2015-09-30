@@ -498,7 +498,7 @@ uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X] =
 #define VOLUME_X 16
 #define VOLUME_Y 16
 #define VOLUME_Z 16
-#define MASTER_OUT_SCATTER 1.
+#define MASTER_OUT_SCATTER .1
 
 	uint32_t volume_color[VOLUME_Z][VOLUME_Y][VOLUME_X];
 
@@ -662,14 +662,8 @@ static inline double HenyeyGreensteinPhaseFunction(double co)
 
 Vec radiance(const Ray &r, int depth, const Radiance backword, Random &rnd);// 前方宣言
 
-static inline Radiance computep_participating_radiance(uint32_t voxel_data, SGGX &S, const Vec i, const Vec o, const Radiance incoming, int depth, Random &rnd)
+static inline Radiance computep_participating_radiance(uint32_t voxel_data, SGGX &S, const Vec i, const Vec o, Radiance incoming, int depth, Random &rnd)
 {
-	const double inscatter_probability = 0.01;
-	if (inscatter_probability < rnd.next01())
-	{
-		return incoming;
-	}
-
 	// ワールド空間に変換
 	const Vec iw = cube_2_world(i);
 	const Vec ow = cube_2_world(o);
@@ -686,6 +680,14 @@ static inline Radiance computep_participating_radiance(uint32_t voxel_data, SGGX
 
 	double sigma_t = density * sigma;
 	Vec sigma_s = albedo * density * sigma;
+	double trans = exp(-sigma_t * l);	// 透過率
+
+	const double inscatter_probability = 0.01;
+	if (inscatter_probability < rnd.next01())
+	{
+		incoming.transmit = incoming.transmit * trans;
+		return incoming;
+	}
 
 	Vec w_d = sggx::sample_diffues(wi, S, rnd);
 	Vec w_s = sggx::sample_specular(wi, S, rnd);
@@ -704,9 +706,6 @@ static inline Radiance computep_participating_radiance(uint32_t voxel_data, SGGX
 		sigma_s *
 		exp(-t_in * l * sigma_t) * // 入射後の減衰
 		(t_in * l / inscatter_probability / (4.0 * M_PI));
-
-	// 透過光
-	double trans = exp(-sigma_t * l);
 
 	return Radiance(incoming.emit + L_out * incoming.transmit, incoming.transmit * trans);
 }
@@ -755,6 +754,8 @@ Radiance ParticipatingEffect(const Ray &o, Radiance backword, int depth, Random 
 		uint32_t voxel_data = volume_color[id[2]][id[1]][id[0]];
 voxel_data = ((id[2] + id[1] + id[0]) & 1) ? ~(uint32_t)0 : 0;
 
+voxel_data = 0xffffffff;
+
 		if (tx < ty && tx < tz){
 			t = (1.0 < tx) ? 1.0 : tx;
 			Vec next = o.o + o.d * t;
@@ -762,8 +763,10 @@ voxel_data = ((id[2] + id[1] + id[0]) & 1) ? ~(uint32_t)0 : 0;
 			int id_sggx[3] = {(int)((double)SGGX_X * next.x), (int)((double)SGGX_Y * next.y), (int)((double)SGGX_Z * next.z),};
 			SGGX S = sggx_data[id_sggx[2]][id_sggx[1]][id_sggx[0]].import();
 double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
-//S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
-S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
+S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
+//S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
+
+S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
@@ -778,9 +781,10 @@ S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 			int id_sggx[3] = { (int)((double)SGGX_X * next.x), (int)((double)SGGX_Y * next.y), (int)((double)SGGX_Z * next.z), };
 			SGGX S = sggx_data[id_sggx[2]][id_sggx[1]][id_sggx[0]].import();
 double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
-//S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
-S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
+S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
+//S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 
+S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
@@ -795,9 +799,10 @@ S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 			int id_sggx[3] = { (int)((double)SGGX_X * next.x), (int)((double)SGGX_Y * next.y), (int)((double)SGGX_Z * next.z), };
 			SGGX S = sggx_data[id_sggx[2]][id_sggx[1]][id_sggx[0]].import();
 double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
-//S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
-S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
+S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
+//S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 
+S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
@@ -908,7 +913,7 @@ public:
 		{
 			// ray tracing!!!
 			const int samps = 8; // # samples iteration_max*samps がカメラからレイを飛ばす数になる
-#pragma omp parallel for schedule(dynamic, 1)       // OpenMP 
+#pragma omp parallel for schedule(dynamic, 1) num_threads(7)       // OpenMP 
 			for (int y = 0; y < h; y++){                       // Loop over image rows 
 				fprintf(stderr, "\r[iteration %d]: Rendering (%d spp) %5.2f%%", l, samps * 4, 100.*y / (h - 1));
 				Random rnd(y + l * w * h + 1);
