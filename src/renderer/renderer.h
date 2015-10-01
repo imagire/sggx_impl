@@ -766,7 +766,7 @@ double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
 S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
 //S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 
-S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
+S = SGGX(0.0001, 1.0, 1.0, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
@@ -784,7 +784,7 @@ double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
 S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
 //S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 
-S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
+S = SGGX(0.0001, 1.0, 1.0, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
@@ -802,7 +802,7 @@ double szz = 0.001 + (0.1 / SGGX_Z) * (double)id_sggx[0];
 S = SGGX(1.0, szz, szz, 0.0, 0.0, 0.0);
 //S = SGGX(1.0, 1.0, szz, 0.0, 0.0, 0.0);
 
-S = SGGX(1.0, 1.0, 0.001, 0.0, 0.0, 0.0);
+S = SGGX(0.0001, 1.0, 1.0, 0.0, 0.0, 0.0);
 
 			backword = computep_participating_radiance(voxel_data, S, x, next, backword, depth, rnd);// ラディアンスの計算
 			x = next;
